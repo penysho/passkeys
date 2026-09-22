@@ -4,7 +4,10 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError, apiFetch, type User } from "@/lib/api";
 import {
+  PASSKEY_UI_MODE,
   bindPasskeyLoginClick,
+  startConditionalLogin,
+  useConditionalUISupport,
   usePasskeySupport,
   webauthnErrorMessage,
 } from "@/lib/webauthn";
@@ -19,7 +22,14 @@ export default function HomePage() {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const passkeysOk = usePasskeySupport();
+  const conditionalSupported = useConditionalUISupport();
   const passkeyButtonRef = useRef<HTMLButtonElement>(null);
+  const cancelConditionalRef = useRef<(() => void) | null>(null);
+
+  // フラグ (PASSKEY_UI_MODE) が "conditional" でも、ブラウザが対応していなければ
+  // 自動的に "button" モードへフォールバックする。
+  const passkeyUIMode: "button" | "conditional" =
+    PASSKEY_UI_MODE === "conditional" && conditionalSupported ? "conditional" : "button";
 
   useEffect(() => {
     apiFetch<User>("/api/me")
@@ -29,7 +39,7 @@ export default function HomePage() {
 
   useEffect(() => {
     const button = passkeyButtonRef.current;
-    if (!button || !passkeysOk || mode !== "login") {
+    if (!button || !passkeysOk || mode !== "login" || passkeyUIMode !== "button") {
       return;
     }
 
@@ -43,10 +53,36 @@ export default function HomePage() {
         setMessage(webauthnErrorMessage(err));
       },
     );
-  }, [passkeysOk, mode, router]);
+  }, [passkeysOk, mode, passkeyUIMode, router]);
+
+  // Conditional UI: ユーザー名欄に autocomplete="username webauthn" を付けた状態で
+  // バックグラウンドで get() を張っておき、ブラウザのオートフィルからパスキーを選べるようにする。
+  useEffect(() => {
+    if (!passkeysOk || mode !== "login" || passkeyUIMode !== "conditional") {
+      return;
+    }
+
+    const cancel = startConditionalLogin(
+      () => {
+        router.push("/dashboard");
+      },
+      (err) => {
+        console.error("conditional passkey login failed", err);
+        setMessage(webauthnErrorMessage(err));
+      },
+    );
+    cancelConditionalRef.current = cancel;
+
+    return () => {
+      cancel();
+      cancelConditionalRef.current = null;
+    };
+  }, [passkeysOk, mode, passkeyUIMode, router]);
 
   async function onPasswordSubmit(event: FormEvent) {
     event.preventDefault();
+    // パスワードでのログインを開始するので、進行中の Conditional UI リクエストは中断する。
+    cancelConditionalRef.current?.();
     setMessage(null);
     setBusy(true);
     try {
@@ -119,7 +155,11 @@ export default function HomePage() {
             <span className="text-muted">ユーザー名</span>
             <input
               className="mt-1 w-full rounded-xl border bg-paper px-3 py-2.5 outline-none ring-copper focus:ring-2"
-              autoComplete="username"
+              autoComplete={
+                mode === "login" && passkeyUIMode === "conditional"
+                  ? "username webauthn"
+                  : "username"
+              }
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required
@@ -155,14 +195,21 @@ export default function HomePage() {
               または
               <span className="h-px flex-1 bg-line" />
             </div>
-            <button
-              ref={passkeyButtonRef}
-              type="button"
-              disabled={!passkeysOk}
-              className="w-full rounded-xl border border-copper/30 bg-copper/10 px-4 py-3 text-sm text-copper-dark disabled:opacity-50"
-            >
-              パスキーでログイン
-            </button>
+
+            {passkeyUIMode === "conditional" ? (
+              <p className="rounded-xl border border-copper/30 bg-copper/10 px-4 py-3 text-sm text-copper-dark">
+                上のユーザー名欄をクリックすると、保存済みのパスキーが候補として表示されます。
+              </p>
+            ) : (
+              <button
+                ref={passkeyButtonRef}
+                type="button"
+                disabled={!passkeysOk}
+                className="w-full rounded-xl border border-copper/30 bg-copper/10 px-4 py-3 text-sm text-copper-dark disabled:opacity-50"
+              >
+                パスキーでログイン
+              </button>
+            )}
             {!passkeysOk && (
               <p className="mt-3 text-xs text-muted">
                 このブラウザはパスキーに対応していません。http://localhost:3000 を Chrome /
@@ -170,8 +217,9 @@ export default function HomePage() {
               </p>
             )}
             <p className="mt-3 text-xs leading-6 text-muted">
-              先にダッシュボードでパスキーを追加してください。ボタンを押すと OS
-              の認証画面が開きます。画面が出ないときはもう一度押してください。
+              {passkeyUIMode === "conditional"
+                ? "先にダッシュボードでパスキーを追加してください。候補が出ないときは一度ユーザー名欄をクリックし直してください。"
+                : "先にダッシュボードでパスキーを追加してください。ボタンを押すと OS の認証画面が開きます。画面が出ないときはもう一度押してください。"}
             </p>
           </>
         )}

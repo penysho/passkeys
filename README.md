@@ -55,3 +55,11 @@ npm run dev
 | `RP_ID` | `localhost` | WebAuthn Relying Party ID |
 | `RP_DISPLAY_NAME` | `Passkeys Demo` | 認証ダイアログに出る名前 |
 | `RP_ORIGINS` | `http://localhost:3000` | 許可する Origin（カンマ区切り） |
+
+## 環境変数（フロントエンド）
+
+| 変数 | デフォルト | 説明 |
+|---|---|---|
+| `NEXT_PUBLIC_PASSKEY_UI_MODE` | `button`(未設定時) | `conditional` にすると、ログイン画面のパスキーログインを Conditional UI（ユーザー名欄への自動サジェスト）に切り替える。ブラウザが未対応の場合は自動的に `button`（明示的なボタン）へフォールバックする。 |
+
+`frontend/.env.local` に `NEXT_PUBLIC_PASSKEY_UI_MODE=conditional` を書いて `npm run dev` を再起動すると切り替えられます。

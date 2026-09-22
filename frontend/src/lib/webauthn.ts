@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 export function supportsPasskeys(): boolean {
   return (
@@ -16,6 +16,63 @@ export function usePasskeySupport(): boolean {
     supportsPasskeys,
     () => false,
   );
+}
+
+/**
+ * パスキーログイン UI のモード。
+ * - "button": 明示的な「パスキーでログイン」ボタンをクリックして navigator.credentials.get() を呼ぶ（デフォルト）。
+ * - "conditional": Conditional UI（autofill）。ユーザー名入力欄をタップ/クリックすると
+ *   ブラウザがそのフィールドにパスキー候補を自動サジェストする。
+ *
+ * NEXT_PUBLIC_PASSKEY_UI_MODE=conditional をビルド時/起動時の環境変数に設定するだけで切り替えられる。
+ * 未設定または "button" 以外の値の場合は "button" にフォールバックする。
+ */
+export type PasskeyUIMode = "button" | "conditional";
+
+export const PASSKEY_UI_MODE: PasskeyUIMode =
+  process.env.NEXT_PUBLIC_PASSKEY_UI_MODE === "conditional" ? "conditional" : "button";
+
+/**
+ * ブラウザが Conditional UI（mediation: "conditional"）に対応しているかを判定する。
+ * 対応判定自体が非同期 API のため Promise を返す。
+ */
+export async function supportsConditionalUI(): Promise<boolean> {
+  if (!supportsPasskeys()) {
+    return false;
+  }
+  const pkc = PublicKeyCredential as unknown as {
+    isConditionalMediationAvailable?: () => Promise<boolean>;
+  };
+  if (typeof pkc.isConditionalMediationAvailable !== "function") {
+    return false;
+  }
+  try {
+    return await pkc.isConditionalMediationAvailable();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Conditional UI 対応状況を返す React フック。
+ * 判定が終わるまでは null（判定中）、以後 true/false。
+ */
+export function useConditionalUISupport(): boolean | null {
+  const [supported, setSupported] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void supportsConditionalUI().then((result) => {
+      if (!cancelled) {
+        setSupported(result);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return supported;
 }
 
 export type CreationOptionsJSON = {
@@ -159,6 +216,68 @@ export function bindPasskeyLoginClick(
 
   button.addEventListener("click", onClick);
   return () => button.removeEventListener("click", onClick);
+}
+
+/**
+ * Conditional UI（autofill）でのパスキーログインを開始する。
+ * ボタンクリックではなくページ側のタイミング（ユーザー名欄の autocomplete="username webauthn"）
+ * から自動的に呼び出す想定。ユーザー名は常に空でリクエストする（discoverable login）。
+ *
+ * 呼び出し元は unmount 時やモード切替時、パスワードでの通常ログイン開始時などに
+ * 戻り値の abort 関数を呼んで進行中のリクエストを中断すること。
+ */
+export function startConditionalLogin(
+  onSuccess: () => void,
+  onError: (err: unknown) => void,
+): () => void {
+  const controller = new AbortController();
+
+  void (async () => {
+    try {
+      const begin = await fetch("/api/passkeys/login/begin", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+        signal: controller.signal,
+      });
+      const optionsJSON = await readJSON<RequestOptionsJSON>(begin);
+      if (controller.signal.aborted) {
+        return;
+      }
+
+      const publicKey = parseRequestOptions(optionsJSON);
+      const credential = await navigator.credentials.get({
+        publicKey,
+        mediation: "conditional" as CredentialMediationRequirement,
+        signal: controller.signal,
+      });
+      if (!credential) {
+        return;
+      }
+
+      const finish = await fetch("/api/passkeys/login/finish", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(serializeCredential(credential as PublicKeyCredential)),
+        signal: controller.signal,
+      });
+      await readJSON(finish);
+      onSuccess();
+    } catch (err) {
+      if (controller.signal.aborted || isAbortError(err)) {
+        return;
+      }
+      onError(err);
+    }
+  })();
+
+  return () => controller.abort();
+}
+
+function isAbortError(err: unknown): boolean {
+  return Boolean(err && typeof err === "object" && "name" in err && err.name === "AbortError");
 }
 
 async function readJSON<T>(res: Response): Promise<T> {
