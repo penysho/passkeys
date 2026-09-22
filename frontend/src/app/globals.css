@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+:root {
+  --paper: #f3eee4;
+  --ink: #1c1712;
+  --muted: #6b5e52;
+  --line: #d9cbb8;
+  --card: #fffaf2;
+  --copper: #9a3412;
+  --copper-dark: #7c2d12;
+  --moss: #3f6212;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-card: var(--card);
+  --color-copper: var(--copper);
+  --color-copper-dark: var(--copper-dark);
+  --color-moss: var(--moss);
+  --font-sans: var(--font-sans), "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+    "Noto Sans JP", sans-serif;
+  --font-serif: var(--font-serif), "Hiragino Mincho ProN", serif;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  background-image:
+    radial-gradient(circle at top right, rgba(154, 52, 18, 0.08), transparent 32%),
+    linear-gradient(180deg, rgba(28, 23, 18, 0.03), transparent 28%);
+}
+
+* {
+  border-color: var(--line);
+}
