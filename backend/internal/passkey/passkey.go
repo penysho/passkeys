@@ -98,7 +98,7 @@ func (s *Service) BeginRegistration(w http.ResponseWriter, user *store.User) (*p
 	return creation, nil
 }
 
-func (s *Service) FinishRegistration(r *http.Request, user *store.User, friendlyName string) (*store.Credential, error) {
+func (s *Service) FinishRegistration(r *http.Request, user *store.User) (*store.Credential, error) {
 	ch, err := s.takeChallenge(r)
 	if err != nil {
 		return nil, err
@@ -114,10 +114,7 @@ func (s *Service) FinishRegistration(r *http.Request, user *store.User, friendly
 	if err != nil {
 		return nil, err
 	}
-	if friendlyName == "" {
-		friendlyName = "パスキー"
-	}
-	stored, err := s.store.InsertCredential(user.ID, friendlyName, *cred)
+	stored, err := s.store.InsertCredential(user.ID, DisplayName(cred.Authenticator.AAGUID, r.UserAgent()), *cred)
 	if err != nil {
 		return nil, err
 	}

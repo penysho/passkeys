@@ -13,12 +13,9 @@ export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [passkeys, setPasskeys] = useState<Passkey[]>([]);
-  const [name, setName] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const passkeysOk = usePasskeySupport();
   const addButtonRef = useRef<HTMLButtonElement>(null);
-  const nameRef = useRef(name);
-  nameRef.current = name;
 
   useEffect(() => {
     let cancelled = false;
@@ -57,9 +54,7 @@ export default function DashboardPage() {
 
     return bindPasskeyRegisterClick(
       button,
-      () => nameRef.current,
       () => {
-        setName("");
         setMessage("パスキーを追加しました");
         void refreshPasskeys();
       },
@@ -124,7 +119,7 @@ export default function DashboardPage() {
         <h2 className="text-lg">パスキーを追加</h2>
         <p className="mt-1 text-sm text-muted">
           ボタンを押すと、この端末の Touch ID / Face ID / Windows Hello
-          などの登録画面が開きます。画面が出ないときはもう一度押してください。
+          などの登録画面が開きます。表示名はパスキーの保存先から自動で付きます。画面が出ないときはもう一度押してください。
         </p>
         {message && (
           <p
@@ -134,13 +129,7 @@ export default function DashboardPage() {
             {message}
           </p>
         )}
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-          <input
-            className="flex-1 rounded-xl border bg-paper px-3 py-2.5 text-sm outline-none ring-copper focus:ring-2"
-            placeholder="表示名（例: MacBook の Touch ID）"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
+        <div className="mt-4">
           <button
             ref={addButtonRef}
             type="button"

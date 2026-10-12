@@ -115,7 +115,6 @@ let pendingRequestOptions: RequestOptionsJSON | null = null;
  */
 export function bindPasskeyRegisterClick(
   button: HTMLButtonElement,
-  getFriendlyName: () => string,
   onSuccess: () => void,
   onError: (err: unknown) => void,
 ): () => void {
@@ -144,9 +143,7 @@ export function bindPasskeyRegisterClick(
         throw new Error("パスキーの作成が完了しませんでした");
       }
 
-      const friendlyName = getFriendlyName().trim();
-      const query = friendlyName ? `?name=${encodeURIComponent(friendlyName)}` : "";
-      const finish = await fetch(`/api/passkeys/register/finish${query}`, {
+      const finish = await fetch("/api/passkeys/register/finish", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

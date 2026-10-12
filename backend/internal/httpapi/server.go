@@ -143,7 +143,7 @@ func (s *Server) handlePasskeyRegisterBegin(w http.ResponseWriter, r *http.Reque
 
 func (s *Server) handlePasskeyRegisterFinish(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
-	cred, err := s.passkey.FinishRegistration(r, user, r.URL.Query().Get("name"))
+	cred, err := s.passkey.FinishRegistration(r, user)
 	if err != nil {
 		writePasskeyError(w, err)
 		return
